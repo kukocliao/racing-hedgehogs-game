@@ -1,0 +1,137 @@
+{
+  "rules": {
+    "rooms": {
+      "spotdiff-main": {
+        "status": {
+          ".read": true,
+          ".write": true
+        },
+        "round": {
+          ".read": true,
+          ".write": true
+        },
+        "players": {
+          ".read": true,
+          "$name": {
+            ".write": true
+          }
+        }
+      },
+      "speedcolors-main": {
+        "status": {
+          ".read": true,
+          ".write": true
+        },
+        "round": {
+          ".read": true,
+          ".write": true
+        },
+        "players": {
+          ".read": true,
+          "$name": {
+            ".write": true
+          }
+        }
+      },
+      "crocoutfit-main": {
+        "hostUid": {
+          ".read": true,
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+        },
+        "state": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === root.child('rooms/crocoutfit-main/hostUid').val()"
+        },
+        "scores": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === root.child('rooms/crocoutfit-main/hostUid').val()"
+        },
+        "players": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === root.child('rooms/crocoutfit-main/hostUid').val()",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['name'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 12"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "answers": {
+          ".read": "auth != null && auth.uid === root.child('rooms/crocoutfit-main/hostUid').val()",
+          ".write": "auth != null && auth.uid === root.child('rooms/crocoutfit-main/hostUid').val()",
+          "$round": {
+            "$uid": {
+              ".read": "auth != null && auth.uid === $uid",
+              ".write": "auth != null && auth.uid === $uid && !data.exists() && root.child('rooms/crocoutfit-main/state/phase').val() === 'answer' && root.child('rooms/crocoutfit-main/state/round/k').val() === $round && now <= root.child('rooms/crocoutfit-main/state/round/endsAt').val()",
+              ".validate": "newData.child('card').isNumber() && newData.child('card').val() >= 0 && newData.child('card').val() < 25 && newData.child('at').val() === now"
+            }
+          }
+        }
+      },
+      "hedgehogs-main": {
+        "hostUid": {
+          ".read": true,
+          ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+        },
+        "state": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()"
+        },
+        "secret": {
+          ".read": "auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()",
+          ".write": "auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()"
+        },
+        "hands": {
+          ".write": "auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()",
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === root.child('rooms/hedgehogs-main/hostUid').val())"
+          }
+        },
+        "players": {
+          ".read": true,
+          ".write": "auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['name'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 12"
+            },
+            "$other": {
+              ".validate": false
+            },
+            "at": {
+              ".validate": "newData.val() === now"
+            }
+          }
+        },
+        "move": {
+          ".read": true,
+          ".write": "(auth != null && auth.uid === root.child('rooms/hedgehogs-main/hostUid').val()) || (auth != null && !data.exists() && root.child('rooms/hedgehogs-main/state/phase').val() === 'play' && root.child('rooms/hedgehogs-main/state/turnUid').val() === auth.uid && newData.child('uid').val() === auth.uid && newData.child('t').val() === root.child('rooms/hedgehogs-main/state/t').val())",
+          ".validate": "newData.hasChildren(['uid', 't', 'id', 'at'])",
+          "uid": {
+            ".validate": "newData.isString()"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "id": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 54 && newData.val() % 1 === 0"
+          },
+          "color": {
+            ".validate": "newData.val() === 'red' || newData.val() === 'yellow' || newData.val() === 'green' || newData.val() === 'blue'"
+          },
+          "at": {
+            ".validate": "newData.val() === now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}

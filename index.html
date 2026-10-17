@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>刺蝟賽跑</title>
+<link rel="stylesheet" href="style.css?v=4">
+<style>
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; padding: 16px; }
+  a.btn { text-decoration: none; width: min(320px, 100%); text-align: center; }
+  .cats { display: flex; gap: 6px; }
+  .cats div { width: 70px; height: 94px; }
+  .cats svg { width: 100%; height: 100%; }
+  p { max-width: 30em; text-align: center; margin: 0; }
+</style>
+</head>
+<body>
+  <h1>🦔 刺蝟賽跑</h1>
+  <div class="cats" id="cats"></div>
+  <p>打出手上的牌讓刺蝟往前跑。有刺蝟衝到終點，大家就用手上剩下的牌算分：哪隻刺蝟跑得遠，那個顏色的牌就值錢。</p>
+  <a class="btn" href="player.html">我是玩家（手機）</a>
+  <a class="btn alt" href="host.html">主控端（大螢幕）</a>
+  <a class="btn" style="background:#2c5c9c" href="local.html?mode=pass">一台平板輪流玩</a>
+  <a class="btn" style="background:#c2357a" href="local.html?mode=group">一台電腦投影帶領</a>
+  <a href="guide.html" style="font-size:1.1rem">📖 玩法說明（帶活動前先看）</a>
+<script src="game.js?v=3"></script>
+<script>document.getElementById('cats').innerHTML = COLORS.map((c) => `<div>${catSVG(c)}</div>`).join('');</script>
+</body>
+</html>

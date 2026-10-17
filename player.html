@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>刺蝟賽跑 玩家</title>
+<link rel="stylesheet" href="style.css?v=4">
+<style>
+  body { padding: 10px; }
+  header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 8px; }
+  .msg { text-align: center; font-size: 1.2rem; margin: 8px 0; }
+  .turn { text-align: center; font-size: 1.6rem; font-weight: 900; margin: 8px 0; color: #c0392b; }
+  input { font-size: 1.3rem; padding: 10px; border-radius: 10px; border: 2px solid #aaa; width: 100%; margin: 12px 0; }
+  .big { font-size: 2.4rem; font-weight: 900; text-align: center; }
+  .track { margin-bottom: 6px; }
+  .pcard { width: 58px; }
+</style>
+</head>
+<body>
+<header><span id="who"></span><span>總分 <b id="score">0</b></span></header>
+<div id="view"><p class="msg">連線中…</p></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js?v=1"></script>
+<script src="sync.js?v=1"></script>
+<script src="game.js?v=3"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let uid, S = { phase: 'lobby' }, me, hand = [], joker = null, sentT = -1, note = '';
+
+signIn().then((u) => {
+  uid = u;
+  room.child('players/' + uid).on('value', (s) => { me = s.val(); render(); });
+  room.child('hands/' + uid).on('value', (s) => { hand = sortHand(s.val() || []); render(); });
+  room.child('state').on('value', (s) => {
+    S = s.val() || { phase: 'lobby' };
+    if (S.seats) fixArrays(S);
+    if (S.t !== sentT) { joker = null; note = ''; }
+    render();
+  });
+  // 主控端判定這張牌不合法會把 move 刪掉、state 不前進：讓玩家換一張再出
+  // 等一下再判斷，避免 move 清掉的事件比新 state 早到、牌閃一下又能點
+  room.child('move').on('value', (s) => {
+    if (s.val() || sentT !== S.t) return;
+    const t = S.t;
+    setTimeout(() => { if (sentT === t && S.t === t && myTurn()) { sentT = -1; note = '這張不行，換一張'; render(); } }, 1500);
+  });
+}).catch((e) => { $('view').innerHTML = `<p class="msg">連線失敗：${escapeHtml(e.message)}</p>`; });
+
+function join() {
+  const name = cleanName($('name').value);
+  if (!name) { $('name').value = ''; $('name').placeholder = '名字不能空白或只有符號'; return; }
+  room.child('players/' + uid).set({ name, at: firebase.database.ServerValue.TIMESTAMP });
+}
+
+const mySeat = () => (S.seats || []).findIndex((s) => s.uid === uid);
+const myTurn = () => S.phase === 'play' && S.turnUid === uid;
+
+function pick(id) {
+  if (!myTurn() || sentT === S.t) return;
+  if (isJoker(id)) { joker = id; render(); return; }
+  send(id);
+}
+// 規則只讓「輪到的人、這一手（t）」寫一次；主控端判定合不合法再推進
+function send(id, color) {
+  sentT = S.t; joker = null; note = '送出了…';
+  render();
+  const m = { uid, t: S.t, id, at: firebase.database.ServerValue.TIMESTAMP };
+  if (color) m.color = color;
+  room.child('move').set(m).catch(() => { sentT = -1; note = '沒送出，再點一次'; render(); });
+}
+
+function render() {
+  if (!uid) return;
+  $('who').textContent = me ? me.name : '';   // textContent 不會被當成 HTML
+  const v = $('view'), seat = mySeat();
+  document.body.classList.toggle('big-ui', !!(S.set && S.set.big));
+  $('score').textContent = seat >= 0 && S.totals ? S.totals[seat] : 0;
+  if (!me) {
+    v.innerHTML = `<p class="msg">輸入你的名字加入遊戲</p><input id="name" maxlength="12" autocomplete="off"><button class="btn" style="width:100%" onclick="join()">加入</button>`;
+    return;
+  }
+  if (S.phase === 'lobby' || !S.seats) {
+    v.innerHTML = `<div style="width:120px;margin:20px auto">${catSVG(COLORS[uid.charCodeAt(0) % 4])}</div><p class="msg">嗨 ${escapeHtml(me.name)}，等主持人開始</p>`;
+    return;
+  }
+  const track = trackHTML(S.pos, { moved: S.last ? COLORS.indexOf(S.last.color) : -1 });
+  const last = S.last ? `<p class="msg">${escapeHtml(describeMove(S, S.seats.map((s) => s.name)))}</p>` : '';
+  if (seat < 0) {
+    v.innerHTML = `${track}${last}<p class="msg">這局已經滿了（或你晚一步加入），先看大螢幕，下一局再一起玩</p>`;
+    return;
+  }
+  if (S.phase === 'raceEnd' || S.phase === 'end') {
+    const h = S.history[S.history.length - 1];
+    const rank = ranking(S);
+    v.innerHTML = `${track}<p class="big">${S.phase === 'end' ? (rank[0] === seat ? '🏆 你贏了！' : '遊戲結束') : '這場結束'}</p>
+      <p class="msg">這場你拿 <b>${h.scores[seat]}</b> 分${h.finisher === seat ? '（含衝終點 +3）' : ''}，總分 ${S.totals[seat]}</p>
+      <div class="hand">${h.hands[seat].map((id) => cardHTML(id, { pos: h.pos, disabled: true })).join('')}</div>
+      <p class="msg">${S.phase === 'end' ? `第 ${rank.indexOf(seat) + 1} 名` : '看大螢幕，等下一場'}</p>`;
+    return;
+  }
+  const mine = myTurn(), waiting = sentT === S.t;
+  const head = mine ? `<p class="turn">${waiting ? note : '輪到你了！點一張牌'}</p>` : `<p class="msg">輪到 ${escapeHtml(S.seats[S.turn].name)}</p>`;
+  const opt = { pos: S.set.hint ? S.pos : null, disabled: !mine || waiting };
+  const body = joker !== null
+    ? `<p class="msg">彩虹牌：要讓哪一隻走 ${cardSteps(joker)} 步？</p><div class="colorpick">${COLORS.map((c) => `<button style="background:${COLOR_HEX[c]}" onclick="send(${joker}, '${c}')">${catSVG(c)}${COLOR_NAMES[c]}</button>`).join('')}</div><p class="center"><button class="btn gray" onclick="joker = null; render()">換一張</button></p>`
+    : `<div class="hand">${hand.map((id) => cardHTML(id, opt)).join('')}</div>`;
+  v.innerHTML = `${track}${last}${head}${body}`;
+  v.querySelectorAll('.hand .pcard').forEach((b) => { b.onclick = () => pick(+b.dataset.id); });
+}
+</script>
+</body>
+</html>

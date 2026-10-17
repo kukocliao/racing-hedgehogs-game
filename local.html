@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>刺蝟賽跑 本機</title>
+<link rel="stylesheet" href="style.css?v=4">
+<style>
+  body { padding: 12px; }
+  main { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  h1 { margin: 4px 0; text-align: center; }
+  .seat { display: flex; gap: 8px; align-items: center; justify-content: center; }
+  .seat input, .seat select { font-size: 1.1rem; padding: 8px; border-radius: 10px; border: 2px solid #aaa; }
+  .seat input { width: 9em; }
+  .msg { text-align: center; font-size: 1.2rem; margin: 4px 0; }
+  .cover { background: #fff; border-radius: 16px; padding: 30px 16px; text-align: center; }
+  .cover .who { font-size: 2rem; font-weight: 900; }
+  .panel { background: #fff; border-radius: 16px; padding: 12px; }
+  .scores td:first-child { white-space: nowrap; }
+  .hand.mini .pcard { width: 46px; }
+  /* 橫向大螢幕（投影 1366×768）：賽道和手牌左右並排，不用捲就看得到全部 */
+  @media (min-width: 1000px) and (orientation: landscape) {
+    main { max-width: 1400px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+    .split .track { width: 100%; }
+  }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">🦔 刺蝟賽跑</h1>
+  <div id="view"></div>
+</main>
+
+<script src="game.js?v=3"></script>
+<script>
+// mode=pass：一台平板輪流傳，輪到誰先遮住別人的牌；mode=group：投影公開手牌，帶領者代點
+const MODE = new URLSearchParams(location.search).get('mode') === 'group' ? 'group' : 'pass';
+const SAVE_KEY = 'hedgehog-local-' + MODE;
+const BOT_DELAY = 1300;
+const $ = (id) => document.getElementById(id);
+const draft = loadSettings();
+let G = null, lastKey = '', shown = false, joker = null, turnStart = 0, paused = false, botTimer = null;
+const SEAT_DEFAULT = [['玩家1', 'human'], ['玩家2', 'human'], ['', 'bot'], ['', 'none'], ['', 'none']];
+
+$('title').textContent = MODE === 'group' ? '🦔 刺蝟賽跑・投影帶領' : '🦔 刺蝟賽跑・平板輪流';
+
+function load() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } }
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch { /* 存不了就只是不能接續 */ } }
+const names = () => G.seats.map((s) => s.name);
+const big = () => document.body.classList.toggle('big-ui', !!(G ? G.set.big : draft.big));
+
+function setupView() {
+  clearTimeout(botTimer);
+  G = null; big();
+  const saved = load();
+  const resume = saved && saved.phase !== 'end' ? `<p class="center"><button class="btn alt" onclick="resumeGame()">繼續上次那局（第 ${saved.race + 1} 場）</button></p>` : '';
+  const seats = SEAT_DEFAULT.map(([n, t], i) => `<div class="seat">座位 ${i + 1}
+    <select data-type="${i}"><option value="human"${t === 'human' ? ' selected' : ''}>真人</option><option value="bot"${t === 'bot' ? ' selected' : ''}>電腦</option><option value="none"${t === 'none' ? ' selected' : ''}>不玩</option></select>
+    <input data-name="${i}" maxlength="8" placeholder="名字" value="${escapeAttr(n)}"></div>`).join('');
+  $('view').innerHTML = `${resume}<div class="panel">${settingsHTML(draft)}</div>
+    <div class="panel"><p class="center">3–5 個座位，真人不夠 3 個時電腦會自動補上；座位 1 先出牌</p>${seats}</div>
+    <p class="center"><button class="btn" onclick="startGame()">開始</button></p>`;
+  bindSettings($('view'), draft, big);
+}
+function escapeAttr(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function startGame() {
+  const seats = [];
+  for (let i = 0; i < 5; i++) {
+    const type = document.querySelector(`[data-type="${i}"]`).value;
+    if (type === 'none') continue;
+    const name = document.querySelector(`[data-name="${i}"]`).value.trim().slice(0, 8);
+    seats.push({ name: name || (type === 'bot' ? '電腦' + (seats.length + 1) : '玩家' + (seats.length + 1)), bot: type === 'bot' ? draft.bot : null });
+  }
+  for (let k = 1; seats.length < MIN_SEATS; k++) seats.push({ name: '電腦' + k, bot: draft.bot });
+  G = newGame(seats, { ...draft });
+  shown = false; joker = null; save(); render();
+}
+function resumeGame() { G = load(); shown = false; joker = null; render(); }
+
+function pickCard(id) {
+  if (paused || G.seats[G.turn].bot) return;
+  if (isJoker(id)) { joker = id; render(); return; }
+  doPlay(id);
+}
+function doPlay(id, color) {
+  if (!play(G, G.turn, id, color)) return;
+  joker = null; shown = false; save(); render();
+}
+
+function scoreTable(cur) {
+  const rows = G.seats.map((s, i) => `<tr class="${i === cur ? 'now' : ''}"><td>${escapeAttr(s.name)}${s.bot ? ' 🤖' : ''}</td><td>${G.hands[i].length} 張</td><td>${G.totals[i]}</td></tr>`).join('');
+  return `<table class="scores"><tr><th>玩家</th><th>手牌</th><th>總分</th></tr>${rows}</table>`;
+}
+
+function render() {
+  clearTimeout(botTimer);
+  big();
+  if (!G) return setupView();
+  const key = G.race + ':' + G.t;
+  if (key !== lastKey) { lastKey = key; turnStart = Date.now(); }   // 換人就重新計時（只是提醒）
+  const cur = G.turn, seat = G.seats[cur], v = $('view');
+  const moved = G.last ? COLORS.indexOf(G.last.color) : -1;
+  const top = `<div class="topbar"><b>第 ${G.race + 1} / ${G.races} 場</b><span>${MODE === 'group' ? `<button class="btn gray" onclick="togglePause()">${paused ? '▶ 繼續這局' : '⏸ 暫停'}</button> ` : ''}<button class="btn gray" onclick="quit()">回設定</button></span></div>`;
+  const track = trackHTML(G.pos, { moved });
+  const lastMsg = G.last ? `<p class="msg">${escapeAttr(describeMove(G, names()))}</p>` : '';
+
+  if (G.phase === 'raceEnd' || G.phase === 'end') {
+    const h = G.history[G.history.length - 1];
+    const rows = G.seats.map((s, i) => `<tr><td>${escapeAttr(s.name)}</td><td><div class="hand mini">${h.hands[i].map((id) => cardHTML(id, { pos: h.pos, disabled: true })).join('') || '—'}</div></td><td>${h.finisher === i ? '+3 🏁' : ''}</td><td><b>${h.scores[i]}</b></td><td>${G.totals[i]}</td></tr>`).join('');
+    const rank = ranking(G);
+    const end = G.phase === 'end';
+    v.innerHTML = `${top}${track}${lastMsg}<div class="panel"><h2 class="center">${end ? `🏆 ${escapeAttr(G.seats[rank[0]].name)} 贏了！` : '這場結束，算分'}</h2>
+      <p class="center">手上剩的牌：刺蝟停在哪一格，那張牌就值幾分；彩虹牌 0 分；總和是負的算 0</p>
+      <table class="scores"><tr><th>玩家</th><th>剩下的牌</th><th>終點</th><th>這場</th><th>總分</th></tr>${rows}</table></div>
+      <p class="center">${end ? '<button class="btn" onclick="localStorage.removeItem(SAVE_KEY); setupView()">再玩一次</button>' : '<button class="btn" onclick="nextRace(G); save(); render()">下一場</button>'}</p>`;
+    return;
+  }
+
+  let action;
+  if (paused) {
+    action = `<div class="cover"><p class="who">⏸ 暫停中</p><button class="btn" onclick="togglePause()">▶ 繼續這局</button></div>`;
+  } else if (seat.bot) {
+    action = `<div class="cover"><p class="who">${escapeAttr(seat.name)} 🤖 想一下…</p></div>`;
+    botTimer = setTimeout(() => { const m = botMove(G, cur); doPlay(m.id, m.color); }, BOT_DELAY);
+  } else if (MODE === 'pass' && !shown) {
+    action = `<div class="cover"><p class="who">輪到 ${escapeAttr(seat.name)}</p><p>其他人先別看螢幕喔</p><button class="btn" onclick="shown = true; turnStart = Date.now(); render()">我是 ${escapeAttr(seat.name)}，看我的牌</button></div>`;
+  } else {
+    const opt = { pos: G.set.hint ? G.pos : null };
+    const pick = joker === null ? '' : `<p class="center">彩虹牌：要讓哪一隻走 ${cardSteps(joker)} 步？</p><div class="colorpick">${COLORS.map((c) => `<button style="background:${COLOR_HEX[c]}" onclick="doPlay(${joker}, '${c}')">${catSVG(c)}${COLOR_NAMES[c]}</button>`).join('')}</div><p class="center"><button class="btn gray" onclick="joker = null; render()">換一張</button></p>`;
+    action = `<div class="panel"><p class="msg"><b>${escapeAttr(seat.name)}</b> 出一張牌 <span class="timer" id="timer"></span></p>
+      ${pick || `<div class="hand">${G.hands[cur].map((id) => cardHTML(id, opt)).join('')}</div>`}</div>`;
+  }
+  v.innerHTML = `${top}<div class="split"><div>${track}${lastMsg}</div><div class="side">${action}<div class="panel">${scoreTable(cur)}</div></div></div>`;
+  v.querySelectorAll('.hand .pcard').forEach((b) => { b.onclick = () => pickCard(+b.dataset.id); });
+  if (joker !== null) v.querySelector(`.pcard[data-id="${joker}"]`)?.classList.add('picked');
+}
+
+// 出牌時間只是提醒，不會替玩家出牌
+setInterval(() => {
+  const t = $('timer');
+  if (!t || !G || !G.set.secs || seatIsBot()) return;
+  const left = G.set.secs - Math.floor((Date.now() - turnStart) / 1000);
+  t.textContent = left > 0 ? `⏱ ${left}` : '⏰ 該出牌囉';
+}, 500);
+const seatIsBot = () => !!G.seats[G.turn]?.bot;
+
+function togglePause() { paused = !paused; render(); }
+function quit() { if (confirm('回到設定畫面？這局會先存起來，可以再按「繼續上次那局」。')) { save(); paused = false; setupView(); } }
+
+setupView();
+</script>
+</body>
+</html>

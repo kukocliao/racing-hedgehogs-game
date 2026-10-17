@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>刺蝟賽跑 主控端</title>
+<link rel="stylesheet" href="style.css?v=4">
+<style>
+  body { display: flex; min-height: 100vh; }
+  main { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+  aside { width: 300px; background: #fff; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  h1 { margin: 0; }
+  .track { width: min(100%, 100vh); }
+  .url { font-size: 1.6rem; font-weight: 700; background: #fff; padding: 10px 18px; border-radius: 12px; word-break: break-all; }
+  .msg { font-size: 1.5rem; text-align: center; margin: 0; }
+  .turn { font-size: 2rem; font-weight: 900; text-align: center; margin: 0; }
+  .scores { width: 100%; font-size: 1.1rem; }
+  .hand.mini .pcard { width: 40px; }
+  .scores td:first-child { white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🦔 刺蝟賽跑</h1>
+  <p id="err" style="color:#c00"></p>
+  <div id="view" style="width:100%"></div>
+</main>
+<aside>
+  <h2 style="margin:0" id="sideTitle">玩家</h2>
+  <div id="side"></div>
+  <p class="row" style="margin-top:auto"><button class="btn alt" id="resetBtn">清空玩家重來</button></p>
+</aside>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js?v=1"></script>
+<script src="sync.js?v=1"></script>
+<script src="game.js?v=3"></script>
+<script>
+// 主控端是整局遊戲的引擎：完整狀態 G 存在 secret（只有主控端讀得到），
+// 公開的 state 不含手牌；每個人的手牌寫在 hands/{uid}，只有本人讀得到
+const BOT_DELAY = 1500;
+const $ = (id) => document.getElementById(id);
+const playerUrl = location.href.replace(/host\.html.*$/, 'player.html');
+const draft = loadSettings();
+let G = null, lobby = true, players = {}, lastHtml = '', botTimer = null, turnKey = '', turnStart = 0;
+
+signIn()
+  .then((uid) => room.child('hostUid').transaction((cur) => (cur && cur !== uid ? undefined : uid)))
+  .then((res) => {
+    if (!res.committed) {
+      $('err').textContent = '這個房間已經綁定另一台主控裝置。要換裝置，請到 Firebase 後台刪掉 rooms/' + ROOM + '/hostUid。';
+      return;
+    }
+    // 主控端重新整理：從 secret 接回原局
+    return room.child('secret').once('value').then((s) => {
+      G = s.val() || null;
+      if (G) fixArrays(G);
+      lobby = !G;
+      room.child('players').on('value', (s) => { players = s.val() || {}; render(); });
+      room.child('move').on('value', (s) => onMove(s.val()));
+      setInterval(tick, 500);   // 不用 rAF：分頁在背景時 rAF 會暫停
+      render();
+    });
+  })
+  .catch((e) => { $('err').textContent = '連線失敗：' + e.message; });
+
+// 公開狀態：手牌只給張數；比賽結束後的 history 本來就要攤牌，照放
+function publicState() {
+  if (!G) return { phase: 'lobby', set: draft };
+  const { hands, ...pub } = G;
+  pub.counts = hands.map((h) => h.length);
+  pub.turnUid = G.phase === 'play' ? G.seats[G.turn].uid || null : null;
+  return pub;
+}
+
+function publish() {
+  render();
+  const upd = { state: publicState(), secret: G, move: null };
+  if (G) G.seats.forEach((s, i) => { if (s.uid) upd['hands/' + s.uid] = G.hands[i]; });
+  return room.update(upd).catch((e) => { $('err').textContent = '同步失敗：' + e.message; });
+}
+
+function startGame() {
+  // 照加入順序排座位，最多 5 人；不夠 3 人電腦補
+  const seats = joinOrder().slice(0, MAX_SEATS).map(([uid, p]) => ({ name: p.name, uid, bot: null }));
+  for (let k = 1; seats.length < MIN_SEATS; k++) seats.push({ name: '電腦' + k, uid: null, bot: draft.bot });
+  G = newGame(seats, { ...draft });
+  lobby = false;
+  room.child('hands').remove().then(publish);
+}
+
+function onMove(m) {
+  if (!m || !G || G.phase !== 'play' || m.t !== G.t) return;
+  const seat = G.seats[G.turn];
+  if (seat.uid !== m.uid) return;
+  if (!play(G, G.turn, m.id, m.color)) { room.child('move').remove(); return; }   // 玩家端看到 move 被刪、t 沒變，就會讓他重出   // 牌不合法就丟掉，玩家端會再出一次
+  publish();
+}
+
+// 電腦玩家、或主持人按「幫他出」都走這裡；t 沒變才出，避免重複
+function autoPlay(t) {
+  if (!G || G.phase !== 'play' || G.t !== t) return;
+  const m = botMove(G, G.turn);
+  if (play(G, G.turn, m.id, m.color)) publish();
+}
+
+function nextRaceBtn() { if (nextRace(G)) publish(); }
+
+function tick() {
+  if (!G || G.phase !== 'play') return;
+  const key = G.race + ':' + G.t;
+  if (key !== turnKey) { turnKey = key; turnStart = Date.now(); }
+  const t = $('timer');
+  if (t && G.set.secs) {
+    const left = G.set.secs - Math.floor((Date.now() - turnStart) / 1000);
+    t.textContent = left > 0 ? `⏱ ${left}` : '⏰ 該出牌囉';
+  }
+}
+
+// 照加入時間排（at 是伺服器時間戳）；沒有 at 的舊資料排最後
+const joinOrder = () => Object.entries(players).sort((a, b) => (a[1].at || Infinity) - (b[1].at || Infinity));
+const names = () => G.seats.map((s) => s.name);
+
+function render() {
+  clearTimeout(botTimer);
+  const pcount = Object.keys(players).length;
+  let html = '', side = '';
+  if (lobby) {
+    const list = joinOrder().map(([, p], i) => `<li>${escapeHtml(p.name)}${i >= MAX_SEATS ? '（滿了，這局觀戰）' : ''}</li>`).join('');
+    side = `<ol>${list}</ol>`;
+    html = `<p class="center">手機打開這個網址加入：</p><p class="url center">${escapeHtml(playerUrl)}</p>
+      <p class="center">已加入 ${pcount} 人${pcount < MIN_SEATS ? `，不夠的 ${MIN_SEATS - pcount} 位由電腦補上` : ''}（最多 5 人）</p>
+      <div class="settings">${settingsHTML(draft)}</div>
+      <p class="center"><button class="btn" onclick="startGame()"${pcount ? '' : ' disabled'}>開始遊戲</button></p>`;
+  } else {
+    const cur = G.turn, seat = G.seats[cur];
+    const rows = G.seats.map((s, i) => `<tr class="${G.phase === 'play' && i === cur ? 'now' : ''}"><td>${escapeHtml(s.name)}${s.bot ? ' 🤖' : ''}</td><td>${G.hands[i].length} 張</td><td>${G.totals[i]}</td></tr>`).join('');
+    side = `<p>第 ${G.race + 1} / ${G.races} 場</p><table class="scores"><tr><th>玩家</th><th>手牌</th><th>總分</th></tr>${rows}</table>`;
+    const moved = G.last ? COLORS.indexOf(G.last.color) : -1;
+    const last = G.last ? `<p class="msg">${escapeHtml(describeMove(G, names()))}</p>` : '<p class="msg">比賽開始！</p>';
+    let action = '';
+    if (G.phase === 'play') {
+      action = seat.bot
+        ? `<p class="turn">${escapeHtml(seat.name)} 🤖 想一下…</p>`
+        : `<p class="turn">輪到 ${escapeHtml(seat.name)} 在手機上出牌 <span class="timer" id="timer"></span></p>
+           <p class="center"><button class="btn gray" onclick="if (confirm('替他從手上隨便出一張？')) autoPlay(${G.t})">幫他出一張（手機斷線時用）</button></p>`;
+      if (seat.bot) botTimer = setTimeout(() => autoPlay(G.t), BOT_DELAY);
+    } else {
+      const h = G.history[G.history.length - 1], end = G.phase === 'end', rank = ranking(G);
+      const res = G.seats.map((s, i) => `<tr><td>${escapeHtml(s.name)}</td><td><div class="hand mini">${h.hands[i].map((id) => cardHTML(id, { pos: h.pos, disabled: true })).join('') || '—'}</div></td><td>${h.finisher === i ? '+3 🏁' : ''}</td><td><b>${h.scores[i]}</b></td></tr>`).join('');
+      action = `<h2 class="center" style="margin:4px">${end ? `🏆 ${escapeHtml(G.seats[rank[0]].name)} 贏了！` : '這場結束，算分'}</h2>
+        <table class="scores"><tr><th>玩家</th><th>剩下的牌（刺蝟停在哪格就值幾分）</th><th>終點</th><th>這場</th></tr>${res}</table>
+        <p class="center">${end ? '<button class="btn" onclick="backToLobby()">回大廳再玩一次</button>' : '<button class="btn" onclick="nextRaceBtn()">下一場</button>'}</p>`;
+    }
+    html = `${trackHTML(G.pos, { moved })}${last}${action}`;
+  }
+  // 內容沒變就不重畫：玩家加入只改名單，主持人正在調的選單不會被收掉
+  if (html !== lastHtml) { $('view').innerHTML = html; lastHtml = html; bindSettings($('view'), draft); }
+  $('side').innerHTML = side;
+  tick();
+}
+
+function backToLobby() { G = null; lobby = true; room.update({ secret: null, hands: null, move: null, state: { phase: 'lobby', set: draft } }); render(); }
+
+$('resetBtn').onclick = () => {
+  if (confirm('清空所有玩家和分數？')) { G = null; lobby = true; room.update({ secret: null, hands: null, move: null, players: null, state: { phase: 'lobby', set: draft } }); render(); }
+};
+</script>
+</body>
+</html>
