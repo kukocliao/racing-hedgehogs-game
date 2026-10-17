@@ -102,7 +102,7 @@ function render() {
     return;
   }
   const mine = myTurn(), waiting = sentT === S.t;
-  const head = mine ? `<p class="turn">${waiting ? note : '輪到你了！點一張牌'}</p>` : `<p class="msg">輪到 ${escapeHtml(S.seats[S.turn].name)}</p>`;
+  const head = mine ? `<p class="turn">${waiting ? note : note || '輪到你了！點一張牌'}</p>` : `<p class="msg">輪到 ${escapeHtml(S.seats[S.turn].name)}</p>`;
   const opt = { pos: S.set.hint ? S.pos : null, disabled: !mine || waiting };
   const body = joker !== null
     ? `<p class="msg">彩虹牌：要讓哪一隻走 ${cardSteps(joker)} 步？</p><div class="colorpick">${COLORS.map((c) => `<button style="background:${COLOR_HEX[c]}" onclick="send(${joker}, '${c}')">${catSVG(c)}${COLOR_NAMES[c]}</button>`).join('')}</div><p class="center"><button class="btn gray" onclick="joker = null; render()">換一張</button></p>`

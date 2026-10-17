@@ -17,6 +17,7 @@
   .scores { width: 100%; font-size: 1.1rem; }
   .hand.mini .pcard { width: 40px; }
   .scores td:first-child { white-space: nowrap; }
+  .reveal { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
 </style>
 </head>
 <body>
@@ -154,7 +155,8 @@ function render() {
         <table class="scores"><tr><th>玩家</th><th>剩下的牌（刺蝟停在哪格就值幾分）</th><th>終點</th><th>這場</th></tr>${res}</table>
         <p class="center">${end ? '<button class="btn" onclick="backToLobby()">回大廳再玩一次</button>' : '<button class="btn" onclick="nextRaceBtn()">下一場</button>'}</p>`;
     }
-    html = `${trackHTML(G.pos, { moved })}${last}${action}`;
+    // 結算時賽道和算分表左右並排，投影 768 高也不用捲就按得到「下一場」
+    html = G.phase === 'play' ? `${trackHTML(G.pos, { moved })}${last}${action}` : `${last}<div class="reveal">${trackHTML(G.pos, { moved })}<div>${action}</div></div>`;
   }
   // 內容沒變就不重畫：玩家加入只改名單，主持人正在調的選單不會被收掉
   if (html !== lastHtml) { $('view').innerHTML = html; lastHtml = html; bindSettings($('view'), draft); }
