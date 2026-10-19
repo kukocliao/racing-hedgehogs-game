@@ -81,8 +81,8 @@ for (let t = 0; t < 600; t++) {
     for (let i = 0; i < 20; i++) assert.strictEqual(g.botMove(G, 0).id, 0);
 }
 
-assert(g.catSVG('red').includes('#d9402b'));
-assert(g.catSVG('rainbow').includes('#3b7dd8') && g.catSVG('rainbow').includes('#e8b923'));
+assert(g.catSVG('red').includes('#E5533D'));
+assert(g.catSVG('rainbow').includes('#4F86C6') && g.catSVG('rainbow').includes('#F2C14E'));
 assert.strictEqual((g.trackHTML([0, 0, 14, 3]).match(/class="cell/g) || []).length, 15);
 assert(g.cardHTML(0, { pos: [3, 0, 0, 0] }).includes('-1 分'));
 

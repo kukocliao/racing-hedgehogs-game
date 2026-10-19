@@ -8,7 +8,7 @@ const BRIDGE = [7, 8];                     // 木橋那兩格，畫面上換顏�
 const FINISH_BONUS = 3;
 const COLORS = ['red', 'yellow', 'green', 'blue'];
 const COLOR_NAMES = { red: '紅', yellow: '黃', green: '綠', blue: '藍', rainbow: '彩虹' };
-const COLOR_HEX = { red: '#d9402b', yellow: '#e8b923', green: '#3d9a4a', blue: '#3b7dd8' };
+const COLOR_HEX = { red: '#E5533D', yellow: '#F2C14E', green: '#6CBF84', blue: '#4F86C6' };
 const HAND_SIZE = { 3: 15, 4: 13, 5: 11 };
 const MIN_SEATS = 3, MAX_SEATS = 5;
 
@@ -130,20 +130,28 @@ function botMove(G, seat, rng = Math.random) {
 }
 
 // ── 角色：摺耳貓戴刺蝟帽（貓的配色比例沿用 croc-outfit-game 的 CAT_PARTS）──
-const INK = '#3b3330';
+const INK = '#3A2E2A', PAPER = '#FFFBF1', CREAM = '#F3DDA6', KHAKI = '#C9A274', PINK = '#F28C8C';
 const stk = (w) => `stroke="${INK}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
 const BODY_RECT = 'x="-105" y="-320" width="210" height="320" rx="74"';
 const whiskers = [-1, 1].map((sd) => [0, 1, 2].map((i) => {
-    const y0 = -230 + i * 11;
-    return `M${sd * 63},${y0} Q${sd * 105},${y0 - 6 + i * 4} ${sd * 131},${y0 - 8 + i * 8}`;
+    const y0 = -196 + i * 11;
+    return `M${sd * 66},${y0} Q${sd * 108},${y0 - 6 + i * 4} ${sd * 134},${y0 - 8 + i * 8}`;
 }).join(' ')).join(' ');
-const CAT_BODY = `<path d="M80,-30 Q160,-40 150,-130" fill="none" stroke="${INK}" stroke-width="26" stroke-linecap="round"/><path d="M80,-30 Q160,-40 150,-130" fill="none" stroke="#F3DDA6" stroke-width="16" stroke-linecap="round"/>`
-    + `<rect x="-62" y="-14" width="26" height="36" rx="8" fill="#F3DDA6" ${stk(4)}/><rect x="36" y="-14" width="26" height="36" rx="8" fill="#F3DDA6" ${stk(4)}/>`
-    + `<rect ${BODY_RECT} fill="#F3DDA6" ${stk(5)}/>`
-    + `<path d="M-50,-236 A8,8 0 0 0 -34,-236 Z M34,-236 A8,8 0 0 0 50,-236 Z" fill="${INK}"/><path d="M-64,-234 L-22,-237 M20,-238 L62,-235" ${stk(4.5)}/>`
-    + `<path d="M-7,-214 Q0,-217 7,-214 Q2,-205 0,-205 Q-2,-205 -7,-214 Z" fill="${INK}"/><path d="M0,-205 V-200 M0,-200 Q-6,-194 -13,-198 M0,-200 Q6,-194 13,-198" fill="none" ${stk(3.5)}/>`
-    + `<g transform="translate(0 20)"><path d="${whiskers}" fill="none" ${stk(3.5)}/></g>`
-    + `<path d="M-100,-150 Q-130,-130 -138,-92 M100,-150 Q130,-130 138,-92" fill="none" ${stk(5)}/><circle cx="-138" cy="-92" r="10.5" fill="#F3DDA6" ${stk(3.5)}/><circle cx="138" cy="-92" r="10.5" fill="#F3DDA6" ${stk(3.5)}/>`;
+// 方塊貓（cube-creature 風格）：墨線 6、平塗、下緣暗帶、左上高光、點點眼＋反光、腮紅、火柴棒腳＋圓腳掌
+const CAT_BODY = `<ellipse cx="0" cy="22" rx="118" ry="8" fill="${INK}" opacity=".13"/>`
+    + `<path d="M84,-34 Q164,-40 152,-134" fill="none" ${stk(6)}/><ellipse cx="152" cy="-142" rx="9" ry="15" fill="${INK}"/>`
+    + `<path d="M-46,0 V20 M46,0 V20" fill="none" ${stk(6)}/><ellipse cx="-40" cy="22" rx="12" ry="6" fill="${INK}"/><ellipse cx="52" cy="22" rx="12" ry="6" fill="${INK}"/>`
+    + `<rect ${BODY_RECT} fill="${CREAM}" stroke="none"/>`
+    + `<path d="M-105,-76 H105 V-74 A74,74 0 0 1 31,0 H-31 A74,74 0 0 1 -105,-74 Z" fill="${INK}" opacity=".09"/>`
+    + `<rect ${BODY_RECT} fill="none" ${stk(6)}/>`
+    + `<path d="M-90,-150 Q-90,-300 -22,-306" fill="none" stroke="${PAPER}" stroke-width="6" stroke-linecap="round" opacity=".8"/>`
+    + `<path d="M-104,-246 Q-128,-244 -124,-218 Q-112,-222 -104,-216 Z M104,-246 Q128,-244 124,-218 Q112,-222 104,-216 Z" fill="${KHAKI}" ${stk(5)}/>`
+    + `<ellipse cx="-40" cy="-232" rx="8.5" ry="9.5" fill="${INK}"/><circle cx="-43" cy="-235.5" r="2.8" fill="${PAPER}"/>`
+    + `<ellipse cx="40" cy="-232" rx="8.5" ry="9.5" fill="${INK}"/><circle cx="37" cy="-235.5" r="2.8" fill="${PAPER}"/>`
+    + `<ellipse cx="-66" cy="-206" rx="14" ry="9" fill="${PINK}" opacity=".55"/><ellipse cx="66" cy="-206" rx="14" ry="9" fill="${PINK}" opacity=".55"/>`
+    + `<path d="M-7,-214 Q0,-217 7,-214 Q2,-206 0,-206 Q-2,-206 -7,-214 Z" fill="${PINK}" ${stk(3.5)}/><path d="M0,-206 V-201 M0,-201 Q-6,-195 -13,-199 M0,-201 Q6,-195 13,-199" fill="none" ${stk(4)}/>`
+    + `<path d="${whiskers}" fill="none" ${stk(3.5)}/>`
+    + `<path d="M-100,-130 Q-128,-112 -134,-78 M100,-130 Q128,-112 134,-78" fill="none" ${stk(6)}/><circle cx="-134" cy="-74" r="10" fill="${CREAM}" ${stk(4.5)}/><circle cx="134" cy="-74" r="10" fill="${CREAM}" ${stk(4.5)}/>`;
 
 // 刺蝟帽：半圓帽身＋一圈尖刺；彩虹萬用牌的刺四色輪流
 function hogHat(color) {
@@ -153,11 +161,12 @@ function hogHat(color) {
     for (let i = 0; i < N; i++) {
         const a0 = Math.PI * (i / N), a1 = Math.PI * ((i + 1) / N), am = (a0 + a1) / 2;
         const p = (a, r) => `${(-Math.cos(a) * r * 1.12).toFixed(1)},${(-268 - Math.sin(a) * r).toFixed(1)}`;
-        spikes.push(`<polygon points="${p(a0, 100)} ${p(am, 150)} ${p(a1, 100)}" fill="${fills[i % fills.length]}" ${stk(4)}/>`);
+        spikes.push(`<polygon points="${p(a0, 100)} ${p(am, 150)} ${p(a1, 100)}" fill="${fills[i % fills.length]}" ${stk(5)}/>`);
     }
-    const base = color === 'rainbow' ? '#f6efe0' : COLOR_HEX[color];
-    return spikes.join('') + `<path d="M-112,-268 A112,100 0 0 1 112,-268 Q0,-252 -112,-268 Z" fill="${base}" ${stk(5)}/>`
-        + `<path d="M-60,-300 l14,-22 M-20,-320 l8,-24 M24,-320 l-6,-24 M64,-300 l-12,-22" stroke="${INK}" stroke-opacity=".3" stroke-width="4" stroke-linecap="round"/>`;
+    const base = color === 'rainbow' ? '#F3DDA6' : COLOR_HEX[color];
+    return spikes.join('') + `<path d="M-112,-268 A112,100 0 0 1 112,-268 Q0,-252 -112,-268 Z" fill="${base}" ${stk(6)}/>`
+        + `<path d="M-112,-268 Q0,-252 112,-268 L112,-262 Q0,-246 -112,-262 Z" fill="${INK}" opacity=".09"/>`
+        + `<path d="M-88,-290 Q-76,-322 -42,-336" fill="none" stroke="${PAPER}" stroke-width="6" stroke-linecap="round" opacity=".8"/>`;
 }
 
 function catSVG(color, label = '') {
@@ -236,6 +245,10 @@ function loadSettings() {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('hedgehog-settings') || '{}') }; } catch { return { ...DEFAULT_SETTINGS }; }
 }
 function saveSettings(cur) { try { localStorage.setItem('hedgehog-settings', JSON.stringify(cur)); } catch { /* 私密模式存不了就算了 */ } }
+
+// 標題前的小貓：<span class="logo"></span> 會被補上一隻小刺蝟貓
+function fillLogos() { document.querySelectorAll('.logo:empty').forEach((el) => { el.innerHTML = catSVG('green', ''); }); }
+if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', fillLogos);
 
 if (typeof module !== 'undefined') {
     module.exports = { TRACK, FINISH, COLORS, HAND_SIZE, DECK_SIZE, FINISH_BONUS, cardColor, cardSteps, isJoker, cardValue, handValue, shuffle, newGame, startRace, play, raceScores, nextRace, ranking, botMove, catSVG, trackHTML, cardHTML, describeMove, fixArrays, PRESETS };
