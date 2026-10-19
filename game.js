@@ -187,12 +187,12 @@ function trackHTML(pos, opts = {}) {
     return `<div class="track">${cells.join('')}</div>`;
 }
 
-// 一張牌：貓＋腳印數；hint 時在下面標「現在值幾分」
+// 一張牌：貓＋大字步數；hint 時在最下面用小字標「現在值幾分」，跟步數分開
 function cardHTML(id, opts = {}) {
     const c = cardColor(id), steps = cardSteps(id);
     const val = opts.pos ? cardValue(id, opts.pos) : null;
-    const hint = val === null ? '' : `<em class="${val < 0 ? 'minus' : ''}">${isJoker(id) ? '0 分' : (val > 0 ? '+' : '') + val + ' 分'}</em>`;
-    return `<button class="pcard ${c}" data-id="${id}"${opts.disabled ? ' disabled' : ''}>${catSVG(c)}<span class="steps">${'🐾'.repeat(steps)}</span>${hint}</button>`;
+    const hint = val === null ? '' : `<em class="${val < 0 ? 'minus' : ''}">值 ${isJoker(id) ? '0' : (val > 0 ? '+' : '') + val} 分</em>`;
+    return `<button class="pcard ${c}" data-id="${id}"${opts.disabled ? ' disabled' : ''}>${catSVG(c)}<span class="steps">${steps}<small>步</small></span>${hint}</button>`;
 }
 
 const describeMove = (G, names) => {

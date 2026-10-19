@@ -85,6 +85,7 @@ assert(g.catSVG('red').includes('#E5533D'));
 assert(g.catSVG('rainbow').includes('#4F86C6') && g.catSVG('rainbow').includes('#F2C14E'));
 assert.strictEqual((g.trackHTML([0, 0, 14, 3]).match(/class="cell/g) || []).length, 15);
 assert(g.cardHTML(0, { pos: [3, 0, 0, 0] }).includes('-1 分'));
+assert(g.cardHTML(0).includes('>1<small>步') && g.cardHTML(6).includes('>2<small>步'), '牌面大字顯示步數');
 
 // 瀏覽器裡各 <script> 共用全域，撞名整頁會掛；接起來編譯一次就抓得到
 const fs = require('fs'), vm = require('vm');
